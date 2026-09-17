@@ -1,0 +1,32 @@
+[project]
+name = "RAG"
+version = "2.0"
+description = "RAG against the machine, Retrieval-Augmented Generation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "faiss-cpu>=1.15.0",
+    "fire>=0.7.1",
+    "pydantic>=2.13.4",
+    "pypdf>=6.16.2",
+    "rank-bm25>=0.2.2",
+    "requests>=2.34.2",
+    "sentence-transformers>=6.0.0",
+    "torch>=2.13.0",
+    "tqdm>=4.70.0",
+    "transformers>=5.15.1",
+]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+]
+
+[tool.mypy]
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
