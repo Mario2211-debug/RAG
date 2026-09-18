@@ -219,4 +219,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 vllm-0.10.1
+moulinette
+*.zip
 .vscode

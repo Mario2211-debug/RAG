@@ -117,8 +117,21 @@ if __name__ == "__main__":
     try:
         dir, documents, full_path = load_docs("vllm-0.10.1")
         py_chunk, md_chunk = chunks(full_path)
-        for chunk in md_chunk:
-            print(chunk, "\n")
+        query = "torch.compile"
+        result: dict = {}
+        print("Chunks python", len(py_chunk))
+        print("Chunks markdown", len(md_chunk))
+        for path, full in full_path.items():
+            if path.endswith(".md"):
+                data = full_path[path]
+                for md_docs in md_chunk:
+                    for chunk in md_docs:
+                        start, end = chunk
+                        if query in data[start:end]:
+                            result[query] = data[start:end]
+        print(len(result))
+        # for chunk in md_chunk:
+            # print(chunk, "\n")
         # print_output(full_path)
     except Exception as e:
         print(f"Error: {e}")
