@@ -3,6 +3,7 @@ import re
 
 
 HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
+_TOKEN_RE = re.compile(r"[A-Za-z][a-z]+|[A-Z]+(?=[A-Z]|$)|[A-Za-z]+")
 
 
 def print_output(full_path: dict) -> None:
@@ -41,64 +42,65 @@ def load_docs(folder: str) -> tuple[list, list, dict]:
     return dir, documents, full_path
 
 
-def chunk_python_file(text: str,
+def chunk_python_file(text: str, index: int,
                       max_chunk_size: int = 2000,
-                      overlap: int = 200) -> list[tuple[int, int]]:
-    """Devolve uma lista de (first_index, last_index) para um ficheiro .py.
-
-    Tenta cortar em linhas em branco ou no início de `def`/`class` quando
-    o chunk se aproxima do tamanho máximo, em vez de cortar a meio de uma
-    linha de código.
-    """
-    spans: list[tuple[int, int]] = []
+                      overlap: int = 200) -> tuple[int, list[tuple[int, int, int]]]:
+    spans: list[tuple[int, int, int]] = []
     start = 0
     n = len(text)
     while start < n:
         end = min(start + max_chunk_size, n)
         if end < n:
-            # procura o último salto de linha "seguro" antes do limite
             boundary = text.rfind("\n\n", start, end)
             if boundary == -1 or boundary <= start:
                 boundary = text.rfind("\n", start, end)
             if boundary > start:
                 end = boundary
-        spans.append((start, end))
+        index += 1
+        spans.append((index, start, end))
         if end >= n:
             break
         start = max(end - overlap, start + 1)
-    return spans
+    return index, spans
 
 
-def chunk_markdown_file(text: str,
+def chunk_markdown_file(text: str, index: int,
                         max_chunk_size: int = 2000,
-                        overlap: int = 200) -> list[tuple[int, int]]:
-    """Divide um ficheiro Markdown priorizando fronteiras de secção (##)."""
+                        overlap: int = 200) -> tuple[int, list[tuple[int, int, int]]]:
     boundaries = [m.start() for m in HEADING_RE.finditer(text)] + [len(text)]
-    spans: list[tuple[int, int]] = []
+    spans: list[tuple[int, int, int]] = []
     start = 0
     for boundary in boundaries:
         while boundary - start > max_chunk_size:
             cut = start + max_chunk_size
             paragraph_break = text.rfind("\n\n", start, cut)
             cut = paragraph_break if paragraph_break > start else cut
-            spans.append((start, cut))
+            index += 1
+            spans.append((index, start, cut))
             start = max(cut - overlap, start + 1)
         if boundary > start:
-            spans.append((start, boundary))
+            index += 1
+            spans.append((index, start, boundary))
             start = boundary
-    return [s for s in spans if s[1] > s[0]]
+    return index, [s for s in spans if s[1] > s[0]]
 
 
-def chunks(full_path: dict) -> tuple:
-
+def chunks(full_path: dict) -> tuple[dict, dict]:
     py_chunk: dict = {}
     md_chunk: dict = {}
+    index: int = 0
+
     for path, full in full_path.items():
         if path.endswith(".py"):
-            py_chunk[path] = (chunk_python_file(full_path[path]))
-        if path.endswith(".md"):
-            md_chunk[path] = (chunk_markdown_file(full_path[path]))
-    return (py_chunk, md_chunk)
+            index, py_chunk[path] = chunk_python_file(full, index)
+        elif path.endswith(".md"):
+            index, md_chunk[path] = chunk_markdown_file(full, index)
+
+    return py_chunk, md_chunk
+
+
+def tokenizer(text: str) -> list[str]:
+    return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
 
 def search_query_in_doc(doc: dict) -> None:
     query = "python"
@@ -111,24 +113,47 @@ def search_query_in_doc(doc: dict) -> None:
             continue
 
         if path not in md_chunk:
-            result[path] = []
+            # result[path] = []
             continue
 
         find: list = []
         idf += 1
         data = text
         for span in md_chunk[path]:
-            start, end = span
+            index, start, end = span
             count = data.count(query, start, end)
             if count > 0:
                 find.append((query, (start, end), count))
-
         result[path] = find
         n = len(result)
         
     return result
 
 
+def build_index(full_path: dict, py_chunk: dict, md_chunk: dict) -> dict:
+    index: dict = {}
+
+    for path, spans in {**py_chunk, **md_chunk}.items():
+        text = full_path[path]
+        for cid, start, end in spans:
+            snippet = text[start:end]
+            index[cid] = {
+                "path": path,
+                "start": start,
+                "end": end,
+                "tokens": tokenizer(snippet),
+            }
+    return index
+
+
+def search(query: str, index: dict, top_k: int = 10) -> list[tuple[int, float]]:
+    q_tokens = tokenizer(query)
+    scores: dict[int, float] = {cid: 0.0 for cid in index}
+    for cid, entry in index.items():
+        for t in q_tokens:
+            scores[cid] += entry["tokens"].count(t)
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    return [kv for kv in ranked[:top_k] if kv[1] > 0]
 def index_bm25():
     pass
 
@@ -148,8 +173,15 @@ for path, value in result.items():
     if result[path] == []:
         continue
     idf += 1
-    print(f"{path}: {value}\n")
+    # print(f"{path}: {value}\n")
+# print("Number of files: ", n)
+# print("Valid files(idf): ", idf)
 
 
-print(n)
-print(idf)
+text = "Everything starts with the index." \
+"# Read the files you judge useful from the vLLM repository shipped in the attachments, split each one into chunks, and persist an index that retrieval can query in milliseconds." \
+"Indexing the whole corpus must take at most 5minutes."
+
+boundaries = [m.start() for m in HEADING_RE.finditer(text)] + [len(text)]
+# print(boundaries)
+print(md_chunk)
