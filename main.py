@@ -91,19 +91,42 @@ def chunk_markdown_file(text: str,
 
 def chunks(full_path: dict) -> tuple:
 
-    py_chunk: list = []
-    md_chunk: list = []
+    py_chunk: dict = {}
+    md_chunk: dict = {}
     for path, full in full_path.items():
         if path.endswith(".py"):
-            py_chunk.append(chunk_python_file(full_path[path]))
+            py_chunk[path] = (chunk_python_file(full_path[path]))
         if path.endswith(".md"):
-            md_chunk.append(chunk_markdown_file(full_path[path]))
+            md_chunk[path] = (chunk_markdown_file(full_path[path]))
     return (py_chunk, md_chunk)
 
+def search_query_in_doc(doc: dict) -> None:
+    query = "python"
+    result: dict = {}
+    n = 0
+    tf = 0
+    idf = 0
+    for path, text in doc.items():
+        if not path.endswith(".md"):
+            continue
 
-dir, documents, full_path = load_docs("vllm-0.10.1")
-py_chunk, md_chunk = chunks(full_path)
+        if path not in md_chunk:
+            result[path] = []
+            continue
 
+        find: list = []
+        idf += 1
+        data = text
+        for span in md_chunk[path]:
+            start, end = span
+            count = data.count(query, start, end)
+            if count > 0:
+                find.append((query, (start, end), count))
+
+        result[path] = find
+        n = len(result)
+        
+    return result
 
 
 def index_bm25():
@@ -111,27 +134,22 @@ def index_bm25():
 
 def index_tf_idf():
     pass
+
+
 """
 """
-if __name__ == "__main__":
-    try:
-        dir, documents, full_path = load_docs("vllm-0.10.1")
-        py_chunk, md_chunk = chunks(full_path)
-        query = "torch.compile"
-        result: dict = {}
-        print("Chunks python", len(py_chunk))
-        print("Chunks markdown", len(md_chunk))
-        for path, full in full_path.items():
-            if path.endswith(".md"):
-                data = full_path[path]
-                for md_docs in md_chunk:
-                    for chunk in md_docs:
-                        start, end = chunk
-                        if query in data[start:end]:
-                            result[query] = data[start:end]
-        print(len(result))
-        # for chunk in md_chunk:
-            # print(chunk, "\n")
-        # print_output(full_path)
-    except Exception as e:
-        print(f"Error: {e}")
+dir, documents, full_path = load_docs("vllm-0.10.1")
+py_chunk, md_chunk = chunks(full_path)
+# print(md_chunk["vllm-0.10.1/benchmarks/README.md"])
+result = search_query_in_doc(full_path)
+n = len(result.items())
+idf = 0
+for path, value in result.items():
+    if result[path] == []:
+        continue
+    idf += 1
+    print(f"{path}: {value}\n")
+
+
+print(n)
+print(idf)
