@@ -51,10 +51,11 @@ def chunk_python_file(text: str, index: int,
     while start < n:
         end = min(start + max_chunk_size, n)
         if end < n:
+            floor = start + max_chunk_size // 2
             boundary = text.rfind("\n\n", start, end)
-            if boundary == -1 or boundary <= start:
+            if boundary <= floor:
                 boundary = text.rfind("\n", start, end)
-            if boundary > start:
+            if boundary > floor:
                 end = boundary
         index += 1
         spans.append((index, start, end))
@@ -74,7 +75,8 @@ def chunk_markdown_file(text: str, index: int,
         while boundary - start > max_chunk_size:
             cut = start + max_chunk_size
             paragraph_break = text.rfind("\n\n", start, cut)
-            cut = paragraph_break if paragraph_break > start else cut
+            if paragraph_break > start + max_chunk_size // 2:
+                cut = paragraph_break
             index += 1
             spans.append((index, start, cut))
             start = max(cut - overlap, start + 1)
@@ -82,7 +84,7 @@ def chunk_markdown_file(text: str, index: int,
             index += 1
             spans.append((index, start, boundary))
             start = boundary
-    return index, [s for s in spans if s[1] > s[0]]
+    return index, [s for s in spans if s[2] > s[1]]
 
 
 def chunks(full_path: dict) -> tuple[dict, dict]:
