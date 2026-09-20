@@ -1,10 +1,15 @@
 import os
 import re
+from typing import DefaultDict, Counter
 
-
+PATH_PREFIX = "data/raw/"
 HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
 _TOKEN_RE = re.compile(r"[A-Za-z][a-z]+|[A-Z]+(?=[A-Z]|$)|[A-Za-z]+")
+SKIP_DIRS = {"__pycache__", "node_modules", ".git"}
+TEXT_EXT = (".py", ".md", ".txt")
 
+def tokenizer(text: str) -> list[str]:
+    return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
 
 def print_output(full_path: dict) -> None:
     for key, value in full_path.items():
@@ -15,31 +20,31 @@ def print_output(full_path: dict) -> None:
     pass
 
 
-def load_docs(folder: str) -> tuple[list, list, dict]:
-    dir: list = []
-    documents: list = []
-    full_path: dict = {}
+def load_docs(folder: str) -> dict[str, str]:
 
-    for item in os.listdir(folder):
-        if item.startswith("_") or item.startswith("."):
+    documents: dict[str, str] = {}
+
+    try:
+        items = os.listdir(folder)
+    except OSError:
+        return documents
+
+    for item in items:
+        if item.startswith(".") and item in SKIP_DIRS:
             continue
         path = os.path.join(folder, item)
-
-        if os.path.isfile(path):
-            if path.endswith((".py", ".md")):
+        if os.path.isdir(path):
+            if item not in SKIP_DIRS:
+                documents.update(load_docs(path))
+        elif item.endswith(TEXT_EXT):
+            try:
                 with open(path, "r", encoding="utf-8",
-                          errors="ignore") as file:
+                        errors="ignore") as file:
                     data = file.read()
-                    documents.append(data)
-                full_path[path] = data
-        elif os.path.isdir(path):
-            dir.append(path)
-            dir_ret, documents_ret, full_ret = load_docs(path)
-
-            full_path.update(full_ret)
-            dir.extend(dir_ret)
-            documents.extend(documents_ret)
-    return dir, documents, full_path
+                    documents[path] = data
+            except OSError:
+                continue
+    return documents
 
 
 def chunk_python_file(text: str, index: int,
@@ -87,22 +92,35 @@ def chunk_markdown_file(text: str, index: int,
     return index, [s for s in spans if s[2] > s[1]]
 
 
-def chunks(full_path: dict) -> tuple[dict, dict]:
-    py_chunk: dict = {}
-    md_chunk: dict = {}
-    index: int = 0
+def build_index(full_path: dict) -> tuple[dict, dict]:
+    postings: dict[str, list] = DefaultDict(list)
+    chunks: dict[int, list] = {}
+    doc_len: dict[int, int] = {}
+    index = 0
 
     for path, full in full_path.items():
         if path.endswith(".py"):
-            index, py_chunk[path] = chunk_python_file(full, index)
+            index, span = chunk_python_file(full, index)
         elif path.endswith(".md"):
-            index, md_chunk[path] = chunk_markdown_file(full, index)
+            index, span = chunk_markdown_file(full, index)
+        for cid, start, end in span:
+            tokens = tokenizer(full[start:end])
+            chunks[cid] = [PATH_PREFIX + path, start, end]
+            doc_len[cid] = len(tokens)
+            for token, freq in Counter(tokens).items():
+                postings[token].append((cid, freq))
+    total = len(doc_len)
+    avgdl = sum(doc_len.values()) / total if total else 0.0
+    print(Counter(tokens).items())
+    return {
+        "postings": dict(postings),
+        "chunks": chunks,
+        "doc_len": doc_len,
+        "avgdl": avgdl,
+        "n_chunks": total
+    }
 
-    return py_chunk, md_chunk
 
-
-def tokenizer(text: str) -> list[str]:
-    return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
 
 def search_query_in_doc(doc: dict) -> None:
     query = "python"
@@ -132,22 +150,6 @@ def search_query_in_doc(doc: dict) -> None:
     return result
 
 
-def build_index(full_path: dict, py_chunk: dict, md_chunk: dict) -> dict:
-    index: dict = {}
-
-    for path, spans in {**py_chunk, **md_chunk}.items():
-        text = full_path[path]
-        for cid, start, end in spans:
-            snippet = text[start:end]
-            index[cid] = {
-                "path": path,
-                "start": start,
-                "end": end,
-                "tokens": tokenizer(snippet),
-            }
-    return index
-
-
 def search(query: str, index: dict, top_k: int = 10) -> list[tuple[int, float]]:
     q_tokens = tokenizer(query)
     scores: dict[int, float] = {cid: 0.0 for cid in index}
@@ -163,27 +165,18 @@ def index_tf_idf():
     pass
 
 
-"""
-"""
-dir, documents, full_path = load_docs("vllm-0.10.1")
-py_chunk, md_chunk = chunks(full_path)
-# print(md_chunk["vllm-0.10.1/benchmarks/README.md"])
-result = search_query_in_doc(full_path)
-n = len(result.items())
-idf = 0
-for path, value in result.items():
-    if result[path] == []:
-        continue
-    idf += 1
-    # print(f"{path}: {value}\n")
-# print("Number of files: ", n)
-# print("Valid files(idf): ", idf)
+documents = load_docs("vllm-0.10.1")
+cks = build_index(documents)
 
 
 text = "Everything starts with the index." \
 "# Read the files you judge useful from the vLLM repository shipped in the attachments, split each one into chunks, and persist an index that retrieval can query in milliseconds." \
 "Indexing the whole corpus must take at most 5minutes."
 
-boundaries = [m.start() for m in HEADING_RE.finditer(text)] + [len(text)]
-# print(boundaries)
-print(md_chunk)
+docs = load_docs("vllm-0.10.1")
+print(len(docs))
+print("vllm-0.10.1/vllm/utils/__init__.py" in docs)
+print("vllm-0.10.1/CMakeLists.txt" in docs)
+for k, v in cks.items():
+    data = cks["postings"]
+    print(data)
