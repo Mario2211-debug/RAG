@@ -5,22 +5,17 @@ import requests
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 
-
 model = SentenceTransformer("Qwen/Qwen3-0.6B", device="cpu")
-
-
 
 def save_vector_db(index, chunks):
     faiss.write_index(index, "index.faiss")
-    
     with open("chunks.pkl", "wb") as f:
         pickle.dump(chunks, f)
 
 
-
 def load_vector_db():
     index = faiss.read_index("index.faiss")
-    
+
     with open("chunks.pkl", "rb") as f:
         chunks = pickle.load(f)
 

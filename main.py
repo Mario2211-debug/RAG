@@ -7,17 +7,18 @@ Uso:
     python3 main.py evaluate-all
 """
 
-import json
-import math
 import os
 import re
 import sys
+import tqdm
+import json
+import math
 import time
+import fire
+from src.data_process import DataProcess
+from src.models import CORPUS_ROOT
 from collections import Counter, defaultdict
 
-CORPUS_ROOT = "vllm-0.10.1"
-# O grader compara os paths tal e qual; o corpus vive em CORPUS_ROOT mas
-# as sources de referencia tem sempre este prefixo.
 PATH_PREFIX = "data/raw/"
 INDEX_PATH = "data/processed/index.json"
 
@@ -43,34 +44,7 @@ def tokenizer(text: str) -> list[str]:
     return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
 
 
-def load_docs(folder: str) -> dict[str, str]:
-    """Le recursivamente os ficheiros de texto do corpus.
-
-    Devolve {path_relativo: conteudo}. Salta diretorios de cache mas
-    nao ficheiros comecados por "_": os __init__.py do vLLM sao codigo
-    real e aparecem como sources de referencia.
-    """
-    documents: dict[str, str] = {}
-    try:
-        items = sorted(os.listdir(folder))
-    except OSError:
-        return documents
-
-    for item in items:
-        if item.startswith("."):
-            continue
-        path = os.path.join(folder, item)
-        if os.path.isdir(path):
-            if item not in SKIP_DIRS:
-                documents.update(load_docs(path))
-        elif item.endswith(TEXT_EXT):
-            try:
-                with open(path, "r", encoding="utf-8",
-                          errors="ignore") as handle:
-                    documents[path] = handle.read()
-            except OSError:
-                continue
-    return documents
+data_processment = DataProcess()
 
 
 def chunk_python_file(
@@ -177,6 +151,8 @@ def save_index(index: dict, path: str = INDEX_PATH) -> None:
 
 def load_index(path: str = INDEX_PATH) -> dict:
     """Recarrega o indice; o JSON devolve as chaves como strings."""
+
+    index: dict = {}
     with open(path, "r", encoding="utf-8") as handle:
         index = json.load(handle)
     index["chunks"] = {int(k): v for k, v in index["chunks"].items()}
@@ -192,7 +168,7 @@ def bm25_scores(query: str, index: dict) -> dict[int, float]:
     avgdl = index["avgdl"] or 1.0
     scores: dict[int, float] = defaultdict(float)
 
-    for token in tokenizer(query):
+    for token in tqdm(tokenizer(query)):
         entries = postings.get(token)
         if not entries:
             continue
@@ -254,7 +230,7 @@ def recall_at_k(dataset_path: str, index: dict, k: int = 5) -> tuple:
 def cmd_index() -> None:
     """Le o corpus, corta, tokeniza, indexa e grava."""
     start = time.time()
-    documents = load_docs(CORPUS_ROOT)
+    documents = data_processment.load_docs(CORPUS_ROOT)
     print(f"ficheiros lidos: {len(documents):,}")
     index = build_index(documents)
     save_index(index)
@@ -347,4 +323,5 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    # fire.Fire("Hello")
     sys.exit(main(sys.argv))
