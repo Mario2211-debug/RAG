@@ -1,29 +1,27 @@
-import os
-import re
+"""Leitura do corpus a partir do disco."""
 
-TEXT_EXT = (".py", ".md", ".txt")
-SKIP_DIRS = {"__pycache__", "node_modules", ".git"}
-_TOKEN_RE = re.compile(r"[A-Za-z][a-z]+|[A-Z]+(?=[A-Z]|$)|[A-Za-z]+")
+import os
+
+from src.config import SKIP_DIRS, TEXT_EXT
 
 
 class DataProcess():
+    """Percorre uma arvore de ficheiros e devolve o texto de cada um."""
 
     def __init__(self) -> None:
         self.docs: dict[str, str] = {}
 
-    def tokenizer(self, text: str) -> list[str]:
-        """Corta texto em tokens minusculos.
-        A mesma funcao corre sobre os chunks (na indexacao) e sobre a
-        pergunta (na pesquisa): os dois lados tem de falar o mesmo dialeto.
-        """
-        return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
-
     def load_docs(self, folder: str) -> dict[str, str]:
         """Le recursivamente os ficheiros de texto do corpus.
-        Devolve {path_relativo: conteudo}.
-        Salta diretorios de cache mas nao ficheiros
-        comecados por "_": os __init__.py do vLLM sao codigo
-        real e aparecem como sources de referencia."""
+
+        Devolve {path_relativo: conteudo}. O path e guardado tal como
+        aparece no disco (data/raw/vllm-0.10.1/...), porque o grader
+        compara os paths verbatim.
+
+        Salta diretorios de cache mas nao ficheiros comecados por "_":
+        os __init__.py do vLLM sao codigo real e aparecem como sources
+        de referencia.
+        """
         try:
             items = sorted(os.listdir(folder))
         except OSError:

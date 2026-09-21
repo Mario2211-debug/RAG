@@ -1,79 +1,66 @@
-import re
+ """Modelos pydantic trocados entre as fases do pipeline.
+
+Sao a fronteira do sistema: tudo o que entra de JSON e validado aqui,
+tudo o que sai e serializado a partir daqui.
+"""
+
 import uuid
 from typing import List
+
 from pydantic import BaseModel, Field
 
 
-K1 = 1.5
-B = 0.75
-OVERLAP = 200
-MIN_IOU = 0.05
-MAX_CHUNK_SIZE = 2000
-PATH_PREFIX = "data/raw/"
-CORPUS_ROOT = "vllm-0.10.1"
-TEXT_EXT = (".py", ".md", ".txt")
-INDEX_PATH = "data/processed/index.json"
-HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
-SKIP_DIRS = {"__pycache__", "node_modules", ".git"}
-_TOKEN_RE = re.compile(r"[A-Za-z][a-z]+|[A-Z]+(?=[A-Z]|$)|[A-Za-z]+")
-
-
-class Augment(BaseModel):
-    pass
-
-
-class Generate(BaseModel):
-    pass
-
-
-class Indexing(BaseModel):
-    pass
-
-
-class Evaluate(BaseModel):
-    pass
-
-
-class DataProcess(BaseModel):
-    pass
-
-
 class MinimalSource(BaseModel):
+    """Uma localizacao no corpus: ficheiro + intervalo de caracteres."""
+
     file_path: str
     first_character_index: int
     last_character_index: int
 
 
 class UnansweredQuestion(BaseModel):
-    question_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()))
+    """Pergunta sem resposta de referencia."""
+
+    question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     question: str
 
 
 class AnsweredQuestion(UnansweredQuestion):
+    """Pergunta com resposta e sources de referencia (ground truth)."""
+
     sources: List[MinimalSource]
     answer: str
 
 
 class RagDataset(BaseModel):
+    """Dataset de perguntas lido de JSON."""
+
     rag_questions: List[AnsweredQuestion | UnansweredQuestion]
 
 
 class MinimalSearchResults(BaseModel):
+    """Resultado de pesquisa para uma pergunta."""
+
     question_id: str
     question: str
     retrieved_sources: List[MinimalSource]
 
 
 class MinimalAnswer(MinimalSearchResults):
+    """Resultado de pesquisa com a resposta gerada."""
+
     answer: str
 
 
 class StudentSearchResults(BaseModel):
+    """Ficheiro de saida do comando search_dataset."""
+
     search_results: List[MinimalSearchResults]
     k: int
 
 
 class StudentSearchResultsAndAnswer(BaseModel):
+    """Ficheiro de saida do comando answer_dataset."""
+
     search_results: List[MinimalAnswer]
     k: int

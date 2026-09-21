@@ -1,31 +1,71 @@
-import os
+"""Construcao, persistencia e carregamento do indice invertido."""
+
 import json
-from src.chunking import chunk_document
-from src.utils.tokenizer import tokenizer
+import os
 from collections import Counter, defaultdict
-from src.models import PATH_PREFIX, INDEX_PATH
+from typing import Any
+
+from tqdm import tqdm
+
+from src.chunking import chunk_document
+from src.config import (HEADING_CONTEXT, HEADING_TEXT_RE, INDEX_PATH,
+                        MAX_CHUNK_SIZE, PATH_BOOST)
+from src.utils.tokenizer import tokenizer
+
+
+REQUIRED_KEYS = ("postings", "chunks", "doc_len", "avgdl", "n_chunks")
 
 
 class Index():
-    def __init__(self,  documents: dict[str, str]) -> None:
-        self.documents = documents
-        pass
+    """Indice invertido lexical sobre os chunks do corpus."""
 
-    def build_index(self) -> dict:
+    def __init__(self, documents: dict[str, str]) -> None:
+        self.documents = documents
+
+    @staticmethod
+    def headings(path: str, text: str) -> list[tuple[int, str]]:
+        """Posicao e texto de cada titulo de um ficheiro de texto."""
+        if path.endswith(".py"):
+            return []
+        return [(m.start(), m.group(1))
+                for m in HEADING_TEXT_RE.finditer(text)]
+
+    @staticmethod
+    def heading_context(headings: list[tuple[int, str]], start: int) -> str:
+        """Os ultimos titulos abertos antes do chunk.
+
+        Um chunk a meio de uma seccao ja nao contem o titulo dela, mas e
+        o titulo que costuma trazer as palavras da pergunta.
+        """
+        above = [title for position, title in headings if position <= start]
+        return " ".join(above[-HEADING_CONTEXT:])
+
+    def build_index(
+        self,
+        max_chunk_size: int = MAX_CHUNK_SIZE,
+    ) -> dict[str, Any]:
         """Constroi o indice invertido numa unica passagem pelo corpus.
 
         Nao procura nada: percorre cada chunk uma vez e vai acrescentando.
         """
-        postings: dict[str, list] = defaultdict(list)
-        chunks: dict[int, list] = {}
+        postings: dict[str, list[list[int]]] = defaultdict(list)
+        chunks: dict[int, list[Any]] = {}
         doc_len: dict[int, int] = {}
         counter = 0
 
-        for path, text in self.documents.items():
-            counter, spans = chunk_document(path, text, counter)
+        for path, text in tqdm(self.documents.items(), desc="indexing",
+                               unit="file"):
+            headings = self.headings(path, text)
+            counter, spans = chunk_document(path, text, counter,
+                                            max_chunk_size)
             for cid, start, end in spans:
-                tokens = tokenizer(text[start:end])
-                chunks[cid] = [PATH_PREFIX + path, start, end]
+                # o nome do ficheiro tambem e evidencia: uma pergunta sobre
+                # "lora" tem de conseguir encontrar docs/features/lora.md
+                context = self.heading_context(headings, start)
+                tokens = (tokenizer(text[start:end])
+                          + tokenizer(path) * PATH_BOOST
+                          + tokenizer(context))
+                chunks[cid] = [path, start, end]
                 doc_len[cid] = len(tokens)
                 for token, freq in Counter(tokens).items():
                     postings[token].append([cid, freq])
@@ -38,9 +78,11 @@ class Index():
             "doc_len": doc_len,
             "avgdl": avgdl,
             "n_chunks": total,
+            "max_chunk_size": max_chunk_size,
         }
 
-    def save_index(self, index: dict, path: str = INDEX_PATH) -> None:
+    def save_index(self, index: dict[str, Any],
+                   path: str = INDEX_PATH) -> None:
         """Persiste o indice em JSON."""
         parent = os.path.dirname(path)
         if parent:
@@ -48,12 +90,14 @@ class Index():
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(index, handle)
 
-    def load_index(self, path: str = INDEX_PATH) -> dict:
+    @staticmethod
+    def load_index(path: str = INDEX_PATH) -> dict[str, Any]:
         """Recarrega o indice; o JSON devolve as chaves como strings."""
-
-        index: dict = {}
         with open(path, "r", encoding="utf-8") as handle:
-            index = json.load(handle)
+            index: dict[str, Any] = json.load(handle)
+        missing = [key for key in REQUIRED_KEYS if key not in index]
+        if missing:
+            raise KeyError(f"missing keys: {', '.join(missing)}")
         index["chunks"] = {int(k): v for k, v in index["chunks"].items()}
         index["doc_len"] = {int(k): v for k, v in index["doc_len"].items()}
         return index

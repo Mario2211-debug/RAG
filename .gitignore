@@ -225,3 +225,5 @@ moulinette
 *.pdf
 data
 teste
+# indice gerado (fica em data/processed/)
+/index.json

@@ -1,4 +1,6 @@
-from src.models import OVERLAP, MAX_CHUNK_SIZE, HEADING_RE
+"""Duas estrategias de corte: uma para codigo, outra para texto."""
+
+from src.config import HEADING_RE, MAX_CHUNK_SIZE, OVERLAP
 
 Span = tuple[int, int, int]
 
@@ -8,9 +10,9 @@ def chunk_python_file(
     index: int,
     max_chunk_size: int = MAX_CHUNK_SIZE,
     overlap: int = OVERLAP,
-) -> tuple[int, list[tuple[int, int, int]]]:
+) -> tuple[int, list[Span]]:
     """Corta codigo em spans (id, inicio, fim), preferindo linhas em branco."""
-    spans: list[tuple[int, int, int]] = []
+    spans: list[Span] = []
     start = 0
     n = len(text)
     while start < n:
@@ -37,11 +39,11 @@ def chunk_markdown_file(
     index: int,
     max_chunk_size: int = MAX_CHUNK_SIZE,
     overlap: int = OVERLAP,
-) -> tuple[int, list[tuple[int, int, int]]]:
+) -> tuple[int, list[Span]]:
     """Corta texto em spans, priorizando fronteiras de seccao (##)."""
     boundaries = [m.start() for m in HEADING_RE.finditer(text)]
     boundaries.append(len(text))
-    spans: list[tuple[int, int, int]] = []
+    spans: list[Span] = []
     start = 0
     for boundary in boundaries:
         while boundary - start > max_chunk_size:
@@ -61,8 +63,13 @@ def chunk_markdown_file(
     return index, [s for s in spans if s[2] > s[1]]
 
 
-def chunk_document(path: str, text: str, index: int) -> tuple[int, list[Span]]:
+def chunk_document(
+    path: str,
+    text: str,
+    index: int,
+    max_chunk_size: int = MAX_CHUNK_SIZE,
+) -> tuple[int, list[Span]]:
     """Despacha por tipo de ficheiro. Unico ponto que sabe a extensao."""
     if path.endswith(".py"):
-        return chunk_python_file(text, index)
-    return chunk_markdown_file(text, index)
+        return chunk_python_file(text, index, max_chunk_size)
+    return chunk_markdown_file(text, index, max_chunk_size)

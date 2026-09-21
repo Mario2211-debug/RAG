@@ -1,0 +1,11 @@
+[flake8]
+# o corpus indexado e o codigo antigo nao sao codigo do projecto
+exclude =
+    .git,
+    .venv,
+    __pycache__,
+    .mypy_cache,
+    .pytest_cache,
+    data,
+    datasets_public,
+    legacy
