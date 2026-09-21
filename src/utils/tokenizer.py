@@ -1,4 +1,4 @@
-from models import _TOKEN_RE
+from src.models import _TOKEN_RE
 
 
 def tokenizer(text: str) -> list[str]:

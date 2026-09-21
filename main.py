@@ -1,163 +1,19 @@
-"""Indexacao lexical (BM25) e pesquisa sobre o corpus vLLM.
-
-Uso:
-    python3 main.py index
-    python3 main.py search "how do I load a LoRA adapter?" [k]
-    python3 main.py evaluate <dataset.json> [k]
-    python3 main.py evaluate-all
-"""
-
 import os
-import re
 import sys
 import tqdm
 import json
 import math
 import time
 import fire
+from typing import Any
+from src.index import Index
 from src.data_process import DataProcess
-from src.models import CORPUS_ROOT
 from collections import Counter, defaultdict
+from src.models import CORPUS_ROOT, INDEX_PATH, MIN_IOU, K1, B
+from src.utils.tokenizer import tokenizer
 
-PATH_PREFIX = "data/raw/"
-INDEX_PATH = "data/processed/index.json"
-
-MAX_CHUNK_SIZE = 2000
-OVERLAP = 200
-K1 = 1.5
-B = 0.75
-MIN_IOU = 0.05
-
-TEXT_EXT = (".py", ".md", ".txt")
-SKIP_DIRS = {"__pycache__", "node_modules", ".git"}
-
-HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
-_TOKEN_RE = re.compile(r"[A-Za-z][a-z]+|[A-Z]+(?=[A-Z]|$)|[A-Za-z]+")
-
-
-def tokenizer(text: str) -> list[str]:
-    """Corta texto em tokens minusculos.
-
-    A mesma funcao corre sobre os chunks (na indexacao) e sobre a
-    pergunta (na pesquisa): os dois lados tem de falar o mesmo dialeto.
-    """
-    return [m.group(0).lower() for m in _TOKEN_RE.finditer(text)]
-
-
-data_processment = DataProcess()
-
-
-def chunk_python_file(
-    text: str,
-    index: int,
-    max_chunk_size: int = MAX_CHUNK_SIZE,
-    overlap: int = OVERLAP,
-) -> tuple[int, list[tuple[int, int, int]]]:
-    """Corta codigo em spans (id, inicio, fim), preferindo linhas em branco."""
-    spans: list[tuple[int, int, int]] = []
-    start = 0
-    n = len(text)
-    while start < n:
-        end = min(start + max_chunk_size, n)
-        if end < n:
-            # so corta numa fronteira depois de meio chunk, caso contrario
-            # o avanco degenera em spans de poucos caracteres
-            floor = start + max_chunk_size // 2
-            boundary = text.rfind("\n\n", start, end)
-            if boundary <= floor:
-                boundary = text.rfind("\n", start, end)
-            if boundary > floor:
-                end = boundary
-        index += 1
-        spans.append((index, start, end))
-        if end >= n:
-            break
-        start = max(end - overlap, start + 1)
-    return index, spans
-
-
-def chunk_markdown_file(
-    text: str,
-    index: int,
-    max_chunk_size: int = MAX_CHUNK_SIZE,
-    overlap: int = OVERLAP,
-) -> tuple[int, list[tuple[int, int, int]]]:
-    """Corta texto em spans, priorizando fronteiras de seccao (##)."""
-    boundaries = [m.start() for m in HEADING_RE.finditer(text)]
-    boundaries.append(len(text))
-    spans: list[tuple[int, int, int]] = []
-    start = 0
-    for boundary in boundaries:
-        while boundary - start > max_chunk_size:
-            cut = start + max_chunk_size
-            # mesma guarda: uma quebra demasiado perto do inicio faria o
-            # loop avancar 1 caracter de cada vez
-            paragraph_break = text.rfind("\n\n", start, cut)
-            if paragraph_break > start + max_chunk_size // 2:
-                cut = paragraph_break
-            index += 1
-            spans.append((index, start, cut))
-            start = max(cut - overlap, start + 1)
-        if boundary > start:
-            index += 1
-            spans.append((index, start, boundary))
-            start = boundary
-    return index, [s for s in spans if s[2] > s[1]]
-
-
-def build_index(documents: dict[str, str]) -> dict:
-    """Constroi o indice invertido numa unica passagem pelo corpus.
-
-    Nao procura nada: percorre cada chunk uma vez e vai acrescentando.
-    """
-    postings: dict[str, list] = defaultdict(list)
-    chunks: dict[int, list] = {}
-    doc_len: dict[int, int] = {}
-    counter = 0
-
-    for path, text in documents.items():
-        if path.endswith(".py"):
-            counter, spans = chunk_python_file(text, counter)
-        else:
-            counter, spans = chunk_markdown_file(text, counter)
-        for cid, start, end in spans:
-            tokens = tokenizer(text[start:end])
-            chunks[cid] = [PATH_PREFIX + path, start, end]
-            doc_len[cid] = len(tokens)
-            # o Counter junta as repeticoes dentro do chunk, por isso
-            # cada chunk entra uma unica vez na lista de cada palavra
-            for token, freq in Counter(tokens).items():
-                postings[token].append([cid, freq])
-
-    total = len(doc_len)
-    avgdl = sum(doc_len.values()) / total if total else 0.0
-    return {
-        "postings": dict(postings),
-        "chunks": chunks,
-        "doc_len": doc_len,
-        "avgdl": avgdl,
-        "n_chunks": total,
-    }
-
-
-def save_index(index: dict, path: str = INDEX_PATH) -> None:
-    """Persiste o indice em JSON."""
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(index, handle)
-
-
-def load_index(path: str = INDEX_PATH) -> dict:
-    """Recarrega o indice; o JSON devolve as chaves como strings."""
-
-    index: dict = {}
-    with open(path, "r", encoding="utf-8") as handle:
-        index = json.load(handle)
-    index["chunks"] = {int(k): v for k, v in index["chunks"].items()}
-    index["doc_len"] = {int(k): v for k, v in index["doc_len"].items()}
-    return index
+indexing = Any
+data = DataProcess()
 
 
 def bm25_scores(query: str, index: dict) -> dict[int, float]:
@@ -230,10 +86,11 @@ def recall_at_k(dataset_path: str, index: dict, k: int = 5) -> tuple:
 def cmd_index() -> None:
     """Le o corpus, corta, tokeniza, indexa e grava."""
     start = time.time()
-    documents = data_processment.load_docs(CORPUS_ROOT)
+    documents = data.load_docs(CORPUS_ROOT)
     print(f"ficheiros lidos: {len(documents):,}")
-    index = build_index(documents)
-    save_index(index)
+    indexing = Index(documents)
+    index = indexing.build_index()
+    indexing.save_index(index)
     size = os.path.getsize(INDEX_PATH) / 1e6
     print(f"chunks .........: {index['n_chunks']:,}")
     print(f"vocabulario ....: {len(index['postings']):,}")
@@ -244,7 +101,7 @@ def cmd_index() -> None:
 
 def cmd_search(query: str, k: int = 10) -> None:
     """Mostra o top-k para uma pergunta."""
-    index = load_index()
+    index = indexing.load_index()
     start = time.time()
     results = search(query, index, k)
     elapsed = time.time() - start
@@ -258,14 +115,14 @@ def cmd_search(query: str, k: int = 10) -> None:
 
 def cmd_evaluate(dataset: str, k: int = 5) -> None:
     """Recall@k de um dataset contra o ground truth."""
-    index = load_index()
+    index = indexing.load_index()
     score, found, total = recall_at_k(dataset, index, k)
     print(f"recall@{k}: {score:.3f}  ({found}/{total})")
 
 
 def cmd_evaluate_all() -> None:
     """Corre os datasets publicos em varios k."""
-    index = load_index()
+    index = indexing.load_index()
     base = "datasets_public/public/AnsweredQuestions"
     datasets = [("docs", f"{base}/dataset_docs_public.json", 0.80),
                 ("code", f"{base}/dataset_code_public.json", 0.50)]
