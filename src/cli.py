@@ -63,6 +63,7 @@ def write_json(payload: Any, save_directory: str, filename: str) -> str:
 
 def load_dataset(path: str) -> RagDataset:
     """Valida um dataset de perguntas contra o modelo pydantic."""
+    print("Here")
     try:
         return RagDataset.model_validate(read_json(path))
     except ValidationError as err:
@@ -79,6 +80,7 @@ def load_search_results(path: str) -> StudentSearchResults:
 
 def load_retriever(index_path: str) -> Retriever:
     """Carrega o indice do disco e devolve um retriever pronto a usar."""
+    print("Here")
     try:
         return Retriever(Index.load_index(index_path))
     except FileNotFoundError:

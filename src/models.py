@@ -1,4 +1,4 @@
- """Modelos pydantic trocados entre as fases do pipeline.
+"""Modelos pydantic trocados entre as fases do pipeline.
 
 Sao a fronteira do sistema: tudo o que entra de JSON e validado aqui,
 tudo o que sai e serializado a partir daqui.
@@ -6,7 +6,6 @@ tudo o que sai e serializado a partir daqui.
 
 import uuid
 from typing import List
-
 from pydantic import BaseModel, Field
 
 

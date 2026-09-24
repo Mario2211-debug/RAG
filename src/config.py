@@ -25,7 +25,7 @@ DEFAULT_K = 10
 MIN_IOU = 0.05
 
 # caminhos por omissao (todos sobreponiveis na CLI)
-CORPUS_ROOT = "data/raw"
+CORPUS_ROOT = "data/raw/vllm-0.10.1"
 INDEX_PATH = "data/processed/index.json"
 
 # leitura do corpus
