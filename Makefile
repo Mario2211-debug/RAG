@@ -58,13 +58,13 @@ debug:
 	$(PYTHON) -m pdb -m src search "$(QUERY)" --k $(K) --index_path $(INDEX)
 
 lint:
-	$(UV) run flake8 . --exclude=.venv,.mypy_cache
+	$(UV) run flake8 . --exclude=.venv,.mypy_cache,data
 	$(UV) run mypy . --warn-return-any --warn-unused-ignores \
 		--ignore-missing-imports --disallow-untyped-defs \
 		--check-untyped-defs
 
 lint-strict:
-	$(UV) run flake8 . --exclude=.venv,.mypy_cache
+	$(UV) run flake8 . --exclude=.venv,.mypy_cache,data
 	$(UV) run mypy . --strict
 
 clean:

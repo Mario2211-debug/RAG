@@ -1,4 +1,4 @@
-"""Pesquisa BM25 sobre o indice invertido."""
+"""BM25 search over the inverted index."""
 
 import math
 from collections import defaultdict
@@ -10,13 +10,13 @@ from src.utils.tokenizer import tokenizer
 
 
 class Retriever():
-    """Pontua e ordena chunks para uma pergunta."""
+    """Score and rank chunks for a question."""
 
     def __init__(self, index: dict[str, Any]) -> None:
         self.index = index
 
     def bm25_scores(self, query: str) -> dict[int, float]:
-        """Pontua apenas os chunks que contem algum token da pergunta."""
+        """Score only chunks that contain at least one query token."""
         postings = self.index["postings"]
         doc_len = self.index["doc_len"]
         total = self.index["n_chunks"]
@@ -27,8 +27,8 @@ class Retriever():
             entries = postings.get(token)
             if not entries:
                 continue
-            # um token presente em quase todos os chunks quase nao
-            # distingue nada: e o idf que lhe tira o peso
+            # a token present in almost every chunk contributes almost nothing;
+            # the IDF is what removes its weight
             df = len(entries)
             idf = math.log((total - df + 0.5) / (df + 0.5) + 1.0)
             for cid, freq in entries:
@@ -37,11 +37,11 @@ class Retriever():
         return scores
 
     def apply_file_prior(self, scores: dict[int, float]) -> dict[int, float]:
-        """Puxa para cima os chunks de ficheiros bons no seu conjunto.
+        """Boost chunks from files that perform well as a group.
 
-        Uma pergunta de documentacao costuma ser sobre um tema, e o tema
-        vive num ficheiro inteiro: se varios chunks do mesmo ficheiro
-        pontuam, e provavel que a resposta esteja la.
+        A documentation question usually concerns a theme, and that theme lives
+        in an entire file: if several chunks from the same file score well, the
+        answer is likely there.
         """
         if not FILE_PRIOR or not scores:
             return scores
@@ -58,11 +58,11 @@ class Retriever():
 
     def search(self, query: str,
                k: int) -> list[tuple[MinimalSource, float]]:
-        """Devolve os k melhores chunks, cada um com o seu score."""
+        """Return the k best chunks, each with its score."""
         if k <= 0 or not query.strip():
             return []
         scores = self.apply_file_prior(self.bm25_scores(query))
-        # desempate pelo id do chunk para a ordenacao ser reproduzivel
+        # break ties by chunk id so the ordering is reproducible
         ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
         results: list[tuple[MinimalSource, float]] = []
         for cid, score in ranked[:k]:
@@ -74,5 +74,5 @@ class Retriever():
         return results
 
     def sources(self, query: str, k: int) -> list[MinimalSource]:
-        """So as sources, sem os scores: o que vai para o JSON de saida."""
+        """Only the sources, without scores: what goes into the JSON output."""
         return [source for source, _score in self.search(query, k)]

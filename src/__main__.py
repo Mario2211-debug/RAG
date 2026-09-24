@@ -1,4 +1,4 @@
-"""Ponto de entrada: uv run python -m src <command> [options]."""
+"""Entry point: uv run python -m src <command> [options]."""
 
 import sys
 import fire
@@ -6,7 +6,7 @@ from src.cli import Cli, CliError
 
 
 def main() -> int:
-    """Despacha para o Fire e transforma erros previstos em mensagens."""
+    """Dispatch to Fire and convert expected errors into messages."""
     try:
         fire.Fire(Cli, name="python -m src")
     except CliError as err:

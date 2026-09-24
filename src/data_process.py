@@ -1,4 +1,4 @@
-"""Leitura do corpus a partir do disco."""
+"""Read the corpus from disk."""
 
 import os
 
@@ -6,21 +6,20 @@ from src.config import SKIP_DIRS, TEXT_EXT
 
 
 class DataProcess():
-    """Percorre uma arvore de ficheiros e devolve o texto de cada um."""
+    """Walk a file tree and return the text of each file."""
 
     def __init__(self) -> None:
         self.docs: dict[str, str] = {}
 
     def load_docs(self, folder: str) -> dict[str, str]:
-        """Le recursivamente os ficheiros de texto do corpus.
+        """Recursively read the text files from the corpus.
 
-        Devolve {path_relativo: conteudo}. O path e guardado tal como
-        aparece no disco (data/raw/vllm-0.10.1/...), porque o grader
-        compara os paths verbatim.
+        Returns {relative_path: content}. The path is stored exactly as it
+        appears on disk (data/raw/vllm-0.10.1/...); the grader compares these
+        paths verbatim.
 
-        Salta diretorios de cache mas nao ficheiros comecados por "_":
-        os __init__.py do vLLM sao codigo real e aparecem como sources
-        de referencia.
+        Skip cache directories but do not skip files starting with "_": the
+        vLLM __init__.py files are real code and appear as reference sources.
         """
         try:
             items = sorted(os.listdir(folder))

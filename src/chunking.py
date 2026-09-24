@@ -1,4 +1,4 @@
-"""Duas estrategias de corte: uma para codigo, outra para texto."""
+"""Two chunking strategies: one for code and one for prose."""
 
 from src.config import HEADING_RE, MAX_CHUNK_SIZE, OVERLAP
 
@@ -11,15 +11,16 @@ def chunk_python_file(
     max_chunk_size: int = MAX_CHUNK_SIZE,
     overlap: int = OVERLAP,
 ) -> tuple[int, list[Span]]:
-    """Corta codigo em spans (id, inicio, fim), preferindo linhas em branco."""
+    """Split code into spans (id, start, end), preferring blank lines."""
     spans: list[Span] = []
     start = 0
     n = len(text)
     while start < n:
         end = min(start + max_chunk_size, n)
         if end < n:
-            # so corta numa fronteira depois de meio chunk, caso contrario
-            # o avanco degenera em spans de poucos caracteres
+            # only cut after the midpoint;
+            # otherwise the overlap would degenerate
+            # into very short spans
             floor = start + max_chunk_size // 2
             boundary = text.rfind("\n\n", start, end)
             if boundary <= floor:
@@ -40,7 +41,7 @@ def chunk_markdown_file(
     max_chunk_size: int = MAX_CHUNK_SIZE,
     overlap: int = OVERLAP,
 ) -> tuple[int, list[Span]]:
-    """Corta texto em spans, priorizando fronteiras de seccao (##)."""
+    """Split text into spans, prioritizing section boundaries (##)."""
     boundaries = [m.start() for m in HEADING_RE.finditer(text)]
     boundaries.append(len(text))
     spans: list[Span] = []
@@ -48,8 +49,8 @@ def chunk_markdown_file(
     for boundary in boundaries:
         while boundary - start > max_chunk_size:
             cut = start + max_chunk_size
-            # mesma guarda: uma quebra demasiado perto do inicio faria o
-            # loop avancar 1 caracter de cada vez
+            # same guard: a break too close to the start would make the loop
+            # move forward one character at a time
             paragraph_break = text.rfind("\n\n", start, cut)
             if paragraph_break > start + max_chunk_size // 2:
                 cut = paragraph_break
@@ -69,7 +70,8 @@ def chunk_document(
     index: int,
     max_chunk_size: int = MAX_CHUNK_SIZE,
 ) -> tuple[int, list[Span]]:
-    """Despacha por tipo de ficheiro. Unico ponto que sabe a extensao."""
+    """Dispatch by file type.
+    This is the only place that knows the extension."""
     if path.endswith(".py"):
         return chunk_python_file(text, index, max_chunk_size)
     return chunk_markdown_file(text, index, max_chunk_size)

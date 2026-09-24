@@ -1,17 +1,17 @@
-"""Tokenizacao lexical usada dos dois lados da pesquisa."""
+"""Lexical tokenization used on both sides of the search."""
 
 from src.config import PART_RE, WORD_RE
 
 
 def tokenizer(text: str) -> list[str]:
-    """Corta texto em tokens minusculos.
+    """Split text into lowercase tokens.
 
-    Guarda o identificador inteiro e tambem as suas partes: uma pergunta
-    pode citar `get_num_layers` tal e qual ou falar de "num layers", e os
-    dois lados tem de chegar ao mesmo chunk.
+    Keep the whole identifier and also its parts: a question may quote
+    `get_num_layers` exactly or mention "num layers", and both sides must
+    reach the same chunk.
 
-    A mesma funcao corre sobre os chunks (na indexacao) e sobre a
-    pergunta (na pesquisa): os dois lados tem de falar o mesmo dialeto.
+    The same function runs on chunks during indexing and on the question during
+    retrieval: both sides must speak the same dialect.
     """
     tokens: list[str] = []
     for match in WORD_RE.finditer(text):

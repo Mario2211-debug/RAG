@@ -1,4 +1,4 @@
-"""Geracao da resposta com Qwen3-0.6B a partir das sources recuperadas."""
+"""Generate answers with Qwen3-0.6B from the retrieved sources."""
 
 from typing import Any
 
@@ -22,7 +22,7 @@ USER_PROMPT = (
 
 
 class Generator():
-    """Envolve o modelo local: carrega-o uma vez e responde com contexto."""
+    """Loads the local model once and answers using the provided context."""
 
     def __init__(self, model_name: str = MODEL_NAME,
                  max_new_tokens: int = MAX_NEW_TOKENS) -> None:
@@ -32,10 +32,10 @@ class Generator():
         self.model: Any = None
 
     def load(self) -> None:
-        """Carrega o modelo a pedido.
+        """Load the model on demand.
 
-        O import vive aqui de proposito: quem so indexa ou pesquisa nao
-        paga os segundos que o torch demora a arrancar.
+        The import lives here on purpose: anyone doing only indexing or search
+        does not pay the seconds it takes for torch to start up.
         """
         if self.model is not None:
             return
@@ -48,7 +48,7 @@ class Generator():
 
     @staticmethod
     def read_source(source: MinimalSource) -> str:
-        """Le do disco o troco de ficheiro que a source aponta."""
+        """Read from disk the snippet of file pointed to by the source."""
         try:
             with open(source.file_path, "r", encoding="utf-8",
                       errors="ignore") as handle:
@@ -59,10 +59,10 @@ class Generator():
                     source.last_character_index]
 
     def build_context(self, sources: list[MinimalSource]) -> str:
-        """Junta as melhores sources num contexto com orcamento fixo.
+        """Combine the best sources into one context under a fixed budget.
 
-        Truncar aqui e deliberado: o modelo tem 0.6B de parametros e
-        afoga-se em contexto tanto como com contexto a menos.
+        Truncating here is intentional: the model has 0.6B parameters and it
+        drowns in too much context as much as it does with too little.
         """
         blocks: list[str] = []
         budget = MAX_CONTEXT_CHARS
@@ -78,7 +78,7 @@ class Generator():
         return "\n\n".join(blocks)
 
     def answer(self, question: str, sources: list[MinimalSource]) -> str:
-        """Responde a pergunta a partir das sources; nunca levanta."""
+        """Answer a question from the retrieved sources without raising."""
         if not question.strip():
             return "No question was provided."
         context = self.build_context(sources)
@@ -87,11 +87,11 @@ class Generator():
         try:
             self.load()
             return self._generate(question, context)
-        except Exception as err:  # noqa: BLE001 - a CLI nunca pode rebentar
+        except Exception as err:  # noqa: BLE001 - the CLI must never crash
             return f"Answer generation failed: {err}"
 
     def _generate(self, question: str, context: str) -> str:
-        """Corre o modelo sobre o prompt ja montado."""
+        """Run the model on the assembled prompt."""
         import torch
 
         messages = [
@@ -115,7 +115,7 @@ class Generator():
 
     @staticmethod
     def _strip_thinking(answer: str) -> str:
-        """Qwen3 pode abrir um bloco <think>; so a resposta interessa."""
+        """Qwen3 may open a <think> block; only the final answer matters."""
         if "</think>" in answer:
             answer = answer.split("</think>")[-1]
         return answer.replace("<think>", "")

@@ -1,7 +1,7 @@
-"""Modelos pydantic trocados entre as fases do pipeline.
+"""Pydantic models exchanged across pipeline stages.
 
-Sao a fronteira do sistema: tudo o que entra de JSON e validado aqui,
-tudo o que sai e serializado a partir daqui.
+These are the boundary of the system: everything entering from JSON is
+validated here, and everything leaving is serialized from here.
 """
 
 import uuid
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 
 class MinimalSource(BaseModel):
-    """Uma localizacao no corpus: ficheiro + intervalo de caracteres."""
+    """A location in the corpus: file + character-range interval."""
 
     file_path: str
     first_character_index: int
@@ -18,27 +18,27 @@ class MinimalSource(BaseModel):
 
 
 class UnansweredQuestion(BaseModel):
-    """Pergunta sem resposta de referencia."""
+    """Question without a reference answer."""
 
     question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     question: str
 
 
 class AnsweredQuestion(UnansweredQuestion):
-    """Pergunta com resposta e sources de referencia (ground truth)."""
+    """Question with an answer and ground-truth sources."""
 
     sources: List[MinimalSource]
     answer: str
 
 
 class RagDataset(BaseModel):
-    """Dataset de perguntas lido de JSON."""
+    """Dataset of questions read from JSON."""
 
     rag_questions: List[AnsweredQuestion | UnansweredQuestion]
 
 
 class MinimalSearchResults(BaseModel):
-    """Resultado de pesquisa para uma pergunta."""
+    """Search result for a question."""
 
     question_id: str
     question: str
@@ -46,20 +46,20 @@ class MinimalSearchResults(BaseModel):
 
 
 class MinimalAnswer(MinimalSearchResults):
-    """Resultado de pesquisa com a resposta gerada."""
+    """Search result with the generated answer."""
 
     answer: str
 
 
 class StudentSearchResults(BaseModel):
-    """Ficheiro de saida do comando search_dataset."""
+    """Output file of the search_dataset command."""
 
     search_results: List[MinimalSearchResults]
     k: int
 
 
 class StudentSearchResultsAndAnswer(BaseModel):
-    """Ficheiro de saida do comando answer_dataset."""
+    """Output file of the answer_dataset command."""
 
     search_results: List[MinimalAnswer]
     k: int

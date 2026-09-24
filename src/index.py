@@ -1,4 +1,4 @@
-"""Construcao, persistencia e carregamento do indice invertido."""
+"""Build, persist, and load the inverted index."""
 
 import json
 import os
@@ -17,14 +17,15 @@ REQUIRED_KEYS = ("postings", "chunks", "doc_len", "avgdl", "n_chunks")
 
 
 class Index():
-    """Indice invertido lexical sobre os chunks do corpus."""
+    """Lexical inverted index over the corpus chunks."""
 
     def __init__(self, documents: dict[str, str]) -> None:
         self.documents = documents
 
     @staticmethod
     def headings(path: str, text: str) -> list[tuple[int, str]]:
-        """Posicao e texto de cada titulo de um ficheiro de texto."""
+        """Position and text of each heading in a text file."""
+        # print(f"Headings:\nPath {path}\nText: {text}")
         if path.endswith(".py"):
             return []
         return [(m.start(), m.group(1))
@@ -32,10 +33,10 @@ class Index():
 
     @staticmethod
     def heading_context(headings: list[tuple[int, str]], start: int) -> str:
-        """Os ultimos titulos abertos antes do chunk.
+        """The most recent headings that were open before the chunk.
 
-        Um chunk a meio de uma seccao ja nao contem o titulo dela, mas e
-        o titulo que costuma trazer as palavras da pergunta.
+        A chunk in the middle of a section does not contain the section title,
+        but that title often carries the words that match the question.
         """
         above = [title for position, title in headings if position <= start]
         return " ".join(above[-HEADING_CONTEXT:])
@@ -44,9 +45,9 @@ class Index():
         self,
         max_chunk_size: int = MAX_CHUNK_SIZE,
     ) -> dict[str, Any]:
-        """Constroi o indice invertido numa unica passagem pelo corpus.
+        """Build the inverted index in a single pass over the corpus.
 
-        Nao procura nada: percorre cada chunk uma vez e vai acrescentando.
+        It does not search: it walks each chunk once and accumulates postings.
         """
         postings: dict[str, list[list[int]]] = defaultdict(list)
         chunks: dict[int, list[Any]] = {}
@@ -59,9 +60,11 @@ class Index():
             counter, spans = chunk_document(path, text, counter,
                                             max_chunk_size)
             for cid, start, end in spans:
-                # o nome do ficheiro tambem e evidencia: uma pergunta sobre
-                # "lora" tem de conseguir encontrar docs/features/lora.md
+                # the file name is also evidence: a question about "lora"
+                # must be able to find docs/features/lora.md
                 context = self.heading_context(headings, start)
+                # print(f"{headings}: {start}")
+                # print(f"CONTEXT: \n{context}")
                 tokens = (tokenizer(text[start:end])
                           + tokenizer(path) * PATH_BOOST
                           + tokenizer(context))
@@ -83,7 +86,7 @@ class Index():
 
     def save_index(self, index: dict[str, Any],
                    path: str = INDEX_PATH) -> None:
-        """Persiste o indice em JSON."""
+        """Persist the index to JSON."""
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -92,7 +95,7 @@ class Index():
 
     @staticmethod
     def load_index(path: str = INDEX_PATH) -> dict[str, Any]:
-        """Recarrega o indice; o JSON devolve as chaves como strings."""
+        """Reload the index; JSON returns string keys."""
         with open(path, "r", encoding="utf-8") as handle:
             index: dict[str, Any] = json.load(handle)
         missing = [key for key in REQUIRED_KEYS if key not in index]

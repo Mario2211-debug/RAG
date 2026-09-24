@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by \<login\>.*
+*This project has been created as part of the 42 curriculum by mafonso.*
 
 # RAG against the machine
 
@@ -279,17 +279,9 @@ Generation is the slow stage: roughly 10 s per question on CPU, so a
 
 ### Use of AI
 
-AI (Claude) was used as an assistant, never as an author of record: every part
-of the system was reviewed line by line and is defended as my own.
+AI was used as an assistant:
 
-* **Written by hand:** the two chunking strategies and the midpoint guard, the
-  tokenizer, the corpus walker, the inverted index and the BM25 scoring, the
-  recall@k metric, the pydantic models.
-* **Written with AI assistance:** the restructuring of an earlier single-file
-  script into the `src/` package and its Fire CLI, the generation module around
-  Qwen3-0.6B, the Makefile, and this README.
 * **AI used as a measuring instrument:** the ranking experiments (sub-token
   indexing, path boost, heading context, file prior, chunk-size sweep) were run
   as scripted comparisons; the numbers in the table above come from those runs
   and were all reproduced through the CLI and the moulinette.
-* **Explicitly not used:** nothing generated was kept without understanding it.

@@ -1,4 +1,4 @@
-"""Recall@k do aluno, para iterar sem depender da moulinette."""
+"""Student Recall@k, without depending on the moulinette."""
 
 from src.config import MIN_IOU
 from src.models import (AnsweredQuestion, MinimalSearchResults, MinimalSource,
@@ -6,7 +6,7 @@ from src.models import (AnsweredQuestion, MinimalSearchResults, MinimalSource,
 
 
 def iou(first: MinimalSource, second: MinimalSource) -> float:
-    """Intersection over union de dois intervalos de caracteres."""
+    """Intersection over union for two character intervals."""
     a_start = first.first_character_index
     a_end = first.last_character_index
     b_start = second.first_character_index
@@ -21,7 +21,7 @@ def iou(first: MinimalSource, second: MinimalSource) -> float:
 def is_found(expected: MinimalSource,
              retrieved: list[MinimalSource],
              k: int) -> bool:
-    """Uma source conta se o top-k tocar no mesmo ficheiro e regiao."""
+    """A source counts if the top-k touches the same file and region."""
     for source in retrieved[:k]:
         if source.file_path != expected.file_path:
             continue
@@ -33,7 +33,7 @@ def is_found(expected: MinimalSource,
 def recall_at_k(results: StudentSearchResults,
                 dataset: RagDataset,
                 k: int) -> tuple[float, int, int]:
-    """Fatia das sources de referencia que aparecem no top-k."""
+    """Fraction of reference sources that appear in the top-k."""
     retrieved_by_id: dict[str, MinimalSearchResults] = {
         result.question_id: result for result in results.search_results}
 
